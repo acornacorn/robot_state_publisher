@@ -82,6 +82,7 @@ private:
 
   std::map<std::string, SegmentPair> segments_, segments_fixed_;
   tf::TransformBroadcaster tf_broadcaster_;
+  std::set<std::string> skip_frames_;
 };
 
 

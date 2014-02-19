@@ -45,8 +45,37 @@ using namespace ros;
 
 namespace robot_state_publisher{
 
+  // fill in a set from a string which is a comma (or space or tab) separated
+  // list of names
+  static void stringToStringSet(const std::string& string_list,
+                             std::set<std::string>& set)
+  {
+    std::size_t p = 0;
+    for (;;)
+    {
+      p = string_list.find_first_not_of(", \t\n", p);
+      if (p == std::string::npos)
+        break;
+      std::size_t e = string_list.find_first_of(", \t\n", p);
+      if (e == std::string::npos)
+      {
+        set.insert(string_list.substr(p));
+        break;
+      }
+      set.insert(string_list.substr(p, e - p));
+      p = e;
+    }
+  }
+
+
   RobotStatePublisher::RobotStatePublisher(const KDL::Tree& tree)
   {
+    ros::NodeHandle n_tilde("~");
+    std::string skip_frames_str;
+    n_tilde.param("skip_frames", skip_frames_str, std::string(""));
+
+    stringToStringSet(skip_frames_str, skip_frames_);
+
     // walk the tree and add segments to segments_
     addChildren(tree.getRootSegment());
   }
@@ -60,14 +89,17 @@ namespace robot_state_publisher{
     const std::vector<KDL::SegmentMap::const_iterator>& children = segment->second.children;
     for (unsigned int i=0; i<children.size(); i++){
       const KDL::Segment& child = children[i]->second.segment;
-      SegmentPair s(children[i]->second.segment, root, child.getName());
-      if (child.getJoint().getType() == KDL::Joint::None){
-        segments_fixed_.insert(make_pair(child.getJoint().getName(), s));
-        ROS_DEBUG("Adding fixed segment from %s to %s", root.c_str(), child.getName().c_str());
-      }
-      else{
-        segments_.insert(make_pair(child.getJoint().getName(), s));
-        ROS_DEBUG("Adding moving segment from %s to %s", root.c_str(), child.getName().c_str());
+      if (skip_frames_.find(child.getName()) == skip_frames_.end())
+      {
+        SegmentPair s(children[i]->second.segment, root, child.getName());
+        if (child.getJoint().getType() == KDL::Joint::None){
+          segments_fixed_.insert(make_pair(child.getJoint().getName(), s));
+          ROS_DEBUG("Adding fixed segment from %s to %s", root.c_str(), child.getName().c_str());
+        }
+        else{
+          segments_.insert(make_pair(child.getJoint().getName(), s));
+          ROS_DEBUG("Adding moving segment from %s to %s", root.c_str(), child.getName().c_str());
+        }
       }
       addChildren(children[i]);
     }
